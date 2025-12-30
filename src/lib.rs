@@ -1,3 +1,24 @@
+//! Client library for ABN Amro online banking
+//!
+//! This library provides automated retrieval of mutations (transactions) from the ABN Amro
+//! banking platform. It handles authentication with the bank's API and fetches transaction
+//! history for specified accounts.
+//!
+//! # Example
+//!
+//! ```no_run
+//! # async fn example() -> anyhow::Result<()> {
+//! let mut session = abna::Session::new("NL12ABNA0123456789".to_string()).await?;
+//! session.login(1234, "12345").await?;
+//!
+//! let mutations = session.mutations("NL12ABNA0123456789", None).await?;
+//! for mutation in &mutations.mutations {
+//!     println!("{:?}", mutation.mutation);
+//! }
+//! # Ok(())
+//! # }
+//! ```
+
 use std::{
     collections::{BTreeMap, HashMap},
     str::FromStr,
@@ -9,12 +30,21 @@ use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
+/// A session for interacting with the ABN Amro banking API
+///
+/// This struct maintains a connection to the ABN Amro API, including cookie-based session
+/// state. Create a new session with [`Session::new()`], authenticate with [`Session::login()`],
+/// and retrieve transaction data with [`Session::mutations()`].
 pub struct Session {
     iban: String,
     client: reqwest::Client,
 }
 
 impl Session {
+    /// Creates a new session for the specified IBAN
+    ///
+    /// This initializes an HTTP client with cookie storage enabled for maintaining session state
+    /// across requests. The session is not authenticated until [`Session::login()`] is called.
     pub async fn new(iban: String) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_STR));
@@ -27,6 +57,24 @@ impl Session {
         })
     }
 
+    /// Authenticates the session with ABN Amro using card number and token
+    ///
+    /// This performs a challenge-response authentication flow with RSA encryption. The
+    /// session must be successfully logged in before calling [`Session::mutations()`].
+    ///
+    /// # Arguments
+    ///
+    /// * `card` - the card number associated with the account (typically 3 digits)
+    /// * `token` - the authentication token (PIN or soft token code)
+    ///
+    /// # Errors
+    ///
+    /// Reasons this could error include:
+    ///
+    /// - The IBAN format is invalid
+    /// - The network request fails
+    /// - Authentication fails (incorrect credentials)
+    /// - The cryptographic operations fail
     pub async fn login(&mut self, card: u16, token: &str) -> anyhow::Result<()> {
         let login = Login {
             access_tool_usage: "SOFTTOKEN",
@@ -68,6 +116,26 @@ impl Session {
         Ok(())
     }
 
+    /// Retrieves a list of mutations (transactions) for the specified account
+    ///
+    /// Returns transaction history with support for pagination. The session must be
+    /// authenticated with [`Session::login()`] before calling this method.
+    ///
+    /// # Arguments
+    ///
+    /// * `iban` - the IBAN of the account to retrieve mutations for
+    /// * `last_mutation_key` - optional key for pagination. Pass `None` to get the most
+    ///   recent transactions, or use the `last_mutation_key` from a previous response to
+    ///   fetch older transactions.
+    ///
+    ///
+    /// # Errors
+    ///
+    /// Reasons this could error include:
+    ///
+    /// - The network request fails
+    /// - The API returns an error response
+    /// - The response cannot be parsed
     pub async fn mutations(
         &self,
         iban: &str,
@@ -109,34 +177,54 @@ impl Session {
     }
 }
 
+/// Response wrapper for the mutations API endpoint
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationsResponse {
+    /// Mutations and associated metadata
     pub mutations_list: MutationsList,
 }
 
+/// A list of mutations with pagination metadata
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationsList {
+    /// Key for fetching the next page of mutations
+    ///
+    /// Pass this to [`Session::mutations()`] to retrieve older transactions.
+    /// `None` indicates there are no more mutations to fetch.
     pub last_mutation_key: Option<String>,
+    /// Indicates whether cached data should be cleared
     pub clear_cache_indicator: bool,
+    /// The list of mutations (transactions) in this response
     pub mutations: Vec<Mutation>,
 }
 
+/// A wrapper for a single mutation (transaction)
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mutation {
+    /// The actual transaction data.
     pub mutation: MutationData,
 }
 
+/// Details of a bank transaction (mutation)
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationData {
+    /// Transaction amount (positive for credits, negative for debits)
     pub amount: f64,
+    /// Name of the counterparty (sender or recipient)
     pub counter_account_name: String,
+    /// Account number of the counterparty
     pub counter_account_number: String,
+    /// ISO currency code (like "EUR")
     pub currency_iso_code: String,
+    /// Description of the transaction, potentially split across multiple lines
     pub description_lines: Vec<String>,
+    /// Date and time when the transaction occurred
+    ///
+    /// This appears to be in the Europe/Amsterdam timezone.
     #[serde(deserialize_with = "transaction_timestamp")]
     pub transaction_timestamp: NaiveDateTime,
 }
@@ -262,10 +350,14 @@ fn encode(obj: BTreeMap<u8, Vec<u8>>) -> Vec<u8> {
     res
 }
 
+/// Error response from the ABN Amro API
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ErrorResponse {
+    /// Human-readable error message
     pub message: Option<String>,
+    /// Error type or code
     pub error: Option<String>,
+    /// HTTP status code associated with the error
     pub status: Option<u16>,
 }
 
