@@ -9,7 +9,7 @@ repository = "https://github.com/djc/abna-rs"
 
 [dependencies]
 anyhow = "1.0"
-aws-lc-rs = "1.15.2"
+aws-lc-rs = "1.15.3"
 chrono = "0.4.42"
 hex = "0.4"
 reqwest = { version = "0.13", features = ["cookies", "default-tls", "json", "query"], default-features = false }
