@@ -2,7 +2,7 @@
 name = "abna"
 version = "0.1.1"
 edition = "2021"
-rust-version = "1.83"
+rust-version = "1.88"
 description = "Automated retrieval of mutations from ABN Amro"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/djc/abna-rs"
