@@ -25,7 +25,7 @@ use std::{
 };
 
 use aws_lc_rs::rsa::{Pkcs1PublicEncryptingKey, PublicKeyComponents};
-use chrono::NaiveDateTime;
+use jiff::civil::DateTime;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
@@ -226,14 +226,12 @@ pub struct MutationData {
     ///
     /// This appears to be in the Europe/Amsterdam timezone.
     #[serde(deserialize_with = "transaction_timestamp")]
-    pub transaction_timestamp: NaiveDateTime,
+    pub transaction_timestamp: DateTime,
 }
 
-fn transaction_timestamp<'de, D: Deserializer<'de>>(
-    deserializer: D,
-) -> Result<NaiveDateTime, D::Error> {
+fn transaction_timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<DateTime, D::Error> {
     let s = <&str>::deserialize(deserializer)?;
-    NaiveDateTime::parse_from_str(s, "%Y%m%d%H%M%S%3f").map_err(serde::de::Error::custom)
+    DateTime::strptime("%Y%m%d%H%M%S%3f", s).map_err(serde::de::Error::custom)
 }
 
 #[derive(Serialize)]
