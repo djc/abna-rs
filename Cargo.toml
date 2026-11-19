@@ -11,7 +11,7 @@ repository = "https://github.com/djc/abna-rs"
 anyhow = "1.0"
 aws-lc-rs = "1.15.2"
 hex = "0.4"
-jiff = { version = "0.2.38", default-features = false, features = ["alloc"] }
+jiff = { version = "1", default-features = false, features = ["alloc"] }
 reqwest = { version = "0.13", features = ["cookies", "default-tls", "json", "query"], default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
